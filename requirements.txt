@@ -1,6 +1,7 @@
 streamlit>=1.40
 torch>=2.2
 transformers>=4.45,<5
+accelerate>=0.34
 huggingface_hub>=0.25
 sentencepiece>=0.2
 safetensors>=0.4
