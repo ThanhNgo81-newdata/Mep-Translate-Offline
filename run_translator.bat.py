@@ -5,7 +5,7 @@ cd /d C:\Users\S4279\Mep-Translate-Offline
 REM Kích hoạt môi trường ảo
 call venv\Scripts\activate
 
-REM Kiểm tra thư mục models (ví dụ: models hoặc transformers)
+REM Kiểm tra thư mục models (ví dụ: models hoặc offline_models)
 IF NOT EXIST models (
     echo Model chưa tồn tại. Đang tải...
     python download_models.py
@@ -14,4 +14,11 @@ IF NOT EXIST models (
 )
 
 REM Khởi chạy ứng dụng Streamlit
-streamlit run mep_translator_offline.py --server.enableCORS false --server.enableXsrfProtection false
+start "" streamlit run mep_translator_offline.py --server.enableCORS false --server.enableXsrfProtection false
+
+REM Chờ vài giây để server khởi động
+timeout /t 5 >nul
+
+REM Tự động mở trình duyệt vào localhost:8501
+start http://localhost:8501
+
