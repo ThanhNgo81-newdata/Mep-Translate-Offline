@@ -17,6 +17,7 @@ from pathlib import Path
 import streamlit as st
 import torch
 from transformers import AutoTokenizer, AutoModelForSeq2SeqLM
+from huggingface_hub import snapshot_download
 from docx import Document
 from docx.text.paragraph import Paragraph
 from docx.oxml import OxmlElement
@@ -87,32 +88,43 @@ st.set_page_config(page_title="MEP Translator Offline", page_icon="🛠️", lay
 
 
 @st.cache_resource(show_spinner="Đang nạp mô hình dịch cục bộ…")
+@st.cache_resource(show_spinner="Đang tải và nạp mô hình dịch…")
+
 def load_model():
-    if not MODEL_DIR.exists():
-        raise FileNotFoundError(
-            f"Chưa có mô hình tại {MODEL_DIR}. Hãy chạy download_models.py trước."
+    # Trên Streamlit Cloud, model chưa tồn tại trong lần chạy đầu tiên.
+    config_file = MODEL_DIR / "config.json"
+
+    if not config_file.exists():
+        MODEL_DIR.mkdir(parents=True, exist_ok=True)
+
+        snapshot_download(
+            repo_id="facebook/nllb-200-distilled-600M",
+            local_dir=str(MODEL_DIR),
+            ignore_patterns=[
+                "*.h5",
+                "*.msgpack",
+                "*.onnx",
+                "*.tflite",
+                "*.ot",
+            ],
         )
+
     tokenizer = AutoTokenizer.from_pretrained(
-        MODEL_DIR, local_files_only=True, use_fast=False
+        str(MODEL_DIR),
+        local_files_only=True,
+        use_fast=False,
     )
+
     model = AutoModelForSeq2SeqLM.from_pretrained(
-        MODEL_DIR, local_files_only=True
+        str(MODEL_DIR),
+        local_files_only=True,
+        low_cpu_mem_usage=True,
     )
+
     model.to(DEVICE)
     model.eval()
+
     return tokenizer, model
-
-
-def protect_tokens(text: str):
-    saved = []
-
-    def repl(m):
-        key = f"ZXQTECH{len(saved)}QXZ"
-        saved.append((key, m.group(0)))
-        return key
-
-    return PROTECT_RE.sub(repl, text), saved
-
 
 def restore_tokens(text: str, saved):
     for key, value in saved:
@@ -307,8 +319,17 @@ st.caption(
     "bằng mô hình dịch cục bộ."
 )
 
-if not MODEL_DIR.exists():
-    st.error("Chưa có model offline. Hãy chạy `python download_models.py` một lần trước khi chạy app.")
+try:
+    with st.spinner(
+        "Đang chuẩn bị model NLLB. Lần chạy đầu có thể mất vài phút..."
+    ):
+        load_model()
+
+    st.success("Model dịch đã sẵn sàng.")
+
+except Exception as error:
+    st.error("Không thể tải hoặc nạp model dịch.")
+    st.exception(error)
     st.stop()
 
 with st.sidebar:
