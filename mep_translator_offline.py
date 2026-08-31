@@ -220,37 +220,37 @@ def copy_cell_style(src, dst):
     except Exception:
         pass
 
+from openpyxl.cell.cell import MergedCell
 
-def translate_xlsx(data, src, tgt, bilingual, progress):
-    wb = openpyxl.load_workbook(io.BytesIO(data))
-    refs = []
+def translate_xlsx(data, src, tgt, bilingual, cb):
+    from openpyxl import load_workbook
+    import os
 
-    for ws in wb.worksheets:
-        for row in ws.iter_rows():
+    wb = load_workbook(data)
+    for sheet in wb.worksheets:
+        for row in sheet.iter_rows():
             for cell in row:
-                if isinstance(cell.value, str) and cell.value.strip():
-                    refs.append((ws.title, cell.coordinate, cell.value))
+                text = cell.value
+                if text and isinstance(text, str):
+                    tr = cb(text, src, tgt, bilingual)
 
-    translations = translate_batch([x[2] for x in refs], src, tgt)
-    total = max(1, len(refs))
+                    # Nếu là MergedCell thì ghi vào ô gốc của vùng merge
+                    if isinstance(cell, MergedCell):
+                        for merged_range in sheet.merged_cells.ranges:
+                            if (cell.row, cell.column) in merged_range.cells:
+                                top_left = sheet.cell(merged_range.min_row, merged_range.min_col)
+                                top_left.value = tr
+                                break
+                    else:
+                        cell.value = tr
 
-    if bilingual:
-        # Add translation immediately to the right when the target cell is not merged.
-        for i, ((sheet, coord, text), tr) in enumerate(zip(refs, translations), 1):
-            ws = wb[sheet]
-            cell = ws[coord]
-            target = ws.cell(row=cell.row, column=cell.column + 1)
-            target.value = tr
-            copy_cell_style(cell, target)
-            progress(i / total)
-    else:
-        for i, ((sheet, coord, text), tr) in enumerate(zip(refs, translations), 1):
-            wb[sheet][coord] = tr
-            progress(i / total)
+    # Lưu file dịch ra cùng tên + _translated.xlsx
+    base, ext = os.path.splitext(data)
+    out_file = f"{base}_translated{ext}"
+    wb.save(out_file)
+    return out_file
 
-    out = io.BytesIO()
-    wb.save(out)
-    return out.getvalue()
+
 
 
 def pdf_to_docx(data, src, tgt, bilingual, page_from, page_to, progress):
